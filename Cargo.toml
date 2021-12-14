@@ -3,5 +3,7 @@ name = "ledgerverse"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", rev = "ffecb05", features = ["bevy_gltf", "jpeg"] }
+[dependencies.bevy]
+git = "https://github.com/bevyengine/bevy"
+rev = "ffecb05"
+features = ["bevy_gltf", "jpeg", "png"]
