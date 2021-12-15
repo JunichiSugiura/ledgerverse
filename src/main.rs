@@ -1,15 +1,20 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use ledger::TransportNativeHID;
+use ledger_transport::APDUTransport;
+use ledger_zondax_generic::*;
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
+        .insert_resource(LedgerConnect::new())
         .add_startup_system(setup)
         .add_system(move_camera)
         .add_system(pan_camera)
         .add_system(update_text_position)
+        .add_system(connect_device)
         .run();
 }
 
@@ -67,9 +72,9 @@ fn setup(
                 ..Default::default()
             },
             text: Text::with_section(
-                "Press \"C\" to Connect Device".to_string(),
+                "Press \"I\" for device info".to_string(),
                 TextStyle {
-                    font,
+                    font: font.clone(),
                     font_size: 14.0,
                     color: Color::WHITE,
                 },
@@ -79,15 +84,7 @@ fn setup(
             ),
             ..Default::default()
         })
-        .insert(FollowText);
-
-    // box
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-    //     material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
-    //     transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-    //     ..Default::default()
-    // });
+        .insert(ConnectText);
 
     // camera
     commands
@@ -118,7 +115,10 @@ struct CameraController {
 }
 
 #[derive(Component)]
-struct FollowText;
+struct ConnectText;
+
+#[derive(Component)]
+struct DeviceInfo;
 
 impl Default for CameraController {
     fn default() -> Self {
@@ -231,7 +231,7 @@ fn pan_camera(
 
 fn update_text_position(
     windows: Res<Windows>,
-    mut text_query: Query<(&mut Style, &CalculatedSize), With<FollowText>>,
+    mut text_query: Query<(&mut Style, &CalculatedSize), With<ConnectText>>,
     mesh_query: Query<&Transform, With<Handle<Mesh>>>,
     camera_query: Query<(&Camera, &GlobalTransform), With<CameraController>>,
 ) {
@@ -254,5 +254,78 @@ fn update_text_position(
                 }
             }
         }
+    }
+}
+
+fn connect_device(key_input: Res<Input<KeyCode>>, mut connect: ResMut<LedgerConnect>) {
+    if key_input.pressed(KeyCode::I) {
+        connect.run();
+    }
+}
+
+struct LedgerConnect {
+    runtime: tokio::runtime::Runtime,
+}
+
+impl LedgerConnect {
+    pub fn new() -> Self {
+        Self {
+            runtime: tokio::runtime::Runtime::new().expect("init async runtime"),
+        }
+    }
+
+    pub fn run(&mut self) {
+        self.runtime.spawn(async move {
+            let hid_wrapper = TransportNativeHID::new();
+
+            tokio::spawn(async move {
+                match hid_wrapper {
+                    Ok(wrapper) => {
+                        let transport = APDUTransport::new(wrapper);
+                        let device_info: Option<ledger_zondax_generic::DeviceInfo>;
+                        let app_info: Option<ledger_zondax_generic::AppInfo>;
+
+                        match get_device_info(&transport).await {
+                            Ok(device) => {
+                                // println!("{:#?}", device);
+                                device_info = Some(device);
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err);
+                                device_info = None;
+                            }
+                        }
+
+                        match get_app_info(&transport).await {
+                            Ok(app) => {
+                                // println!("{:#?}", app);
+                                app_info = Some(app);
+                            }
+                            Err(err) => {
+                                eprintln!("{}", err);
+                                app_info = None;
+                            }
+                        }
+
+                        if let Some(info) = device_info {
+                            println!("");
+                            println!("///////////////// Device Info /////////////////////////");
+                            println!("se_version: {}", info.clone().se_version);
+                            println!("mcu_version: {}", info.mcu_version);
+                        }
+                        if let Some(info) = app_info {
+                            println!("");
+                            println!("///////////////// App Info /////////////////////////");
+                            println!("app_name: {}", info.clone().app_name);
+                            println!("app_version: {}", info.app_version);
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("{}", err);
+                        // TODO Quit app
+                    }
+                }
+            });
+        });
     }
 }
