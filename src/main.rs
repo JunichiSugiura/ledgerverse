@@ -9,6 +9,7 @@ fn main() {
         .add_startup_system(setup)
         .add_system(move_camera)
         .add_system(pan_camera)
+        .add_system(update_text_position)
         .run();
 }
 
@@ -44,6 +45,50 @@ fn setup(
         ..Default::default()
     });
 
+    // ui camera
+    commands.spawn_bundle(UiCameraBundle::default());
+
+    // text
+    let font = asset_server.load("fonts/Roboto_Slab/RobotoSlab-VariableFont_wght.ttf");
+    commands
+        .spawn_bundle(TextBundle {
+            style: Style {
+                align_self: AlignSelf::FlexEnd,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    bottom: Val::Px(100.0),
+                    left: Val::Px(15.0),
+                    ..Default::default()
+                },
+                size: Size {
+                    width: Val::Px(200.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            text: Text::with_section(
+                "Press \"C\" to Connect Device".to_string(),
+                TextStyle {
+                    font,
+                    font_size: 14.0,
+                    color: Color::WHITE,
+                },
+                TextAlignment {
+                    ..Default::default()
+                },
+            ),
+            ..Default::default()
+        })
+        .insert(FollowText);
+
+    // box
+    // commands.spawn_bundle(PbrBundle {
+    //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+    //     material: materials.add(Color::rgb(1.0, 1.0, 1.0).into()),
+    //     transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+    //     ..Default::default()
+    // });
+
     // camera
     commands
         .spawn_bundle(PerspectiveCameraBundle {
@@ -71,6 +116,9 @@ struct CameraController {
     pub yaw: f32,
     pub velocity: Vec3,
 }
+
+#[derive(Component)]
+struct FollowText;
 
 impl Default for CameraController {
     fn default() -> Self {
@@ -149,6 +197,10 @@ fn move_camera(
         transform.translation += options.velocity.x * dt * right
             + options.velocity.y * dt * Vec3::Y
             + options.velocity.z * dt * forward;
+
+        if transform.translation.y < 8.0 {
+            transform.translation.y = 8.0;
+        }
     }
 }
 
@@ -173,6 +225,34 @@ fn pan_camera(
             transform.rotation = Quat::from_euler(EulerRot::ZYX, 0.0, yaw, pitch);
             options.pitch = pitch;
             options.yaw = yaw;
+        }
+    }
+}
+
+fn update_text_position(
+    windows: Res<Windows>,
+    mut text_query: Query<(&mut Style, &CalculatedSize), With<FollowText>>,
+    mesh_query: Query<&Transform, With<Handle<Mesh>>>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<CameraController>>,
+) {
+    for (camera, camera_transform) in camera_query.iter() {
+        for mesh_position in mesh_query.iter() {
+            for (mut style, calculated) in text_query.iter_mut() {
+                match camera.world_to_screen(&windows, camera_transform, mesh_position.translation)
+                {
+                    Some(coords) => {
+                        style.position.left = Val::Px(coords.x - calculated.size.width / 2.0);
+                        style.position.bottom = Val::Px(coords.y - calculated.size.height / 2.0);
+                        // let c = ((coords.x.powf(2.0) + coords.y.powf(2.0)) * -1.0).sqrt();
+                        // println!("x: {}, y: {}, c: {}", coords.x, coords.y, c);
+                        // text_style.font_size = coords.y
+                    }
+                    None => {
+                        // A hack to hide the text when the cube is behind the camera
+                        style.position.bottom = Val::Px(-1000.0);
+                    }
+                }
+            }
         }
     }
 }
