@@ -18,13 +18,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let eiffel_tower_handle = asset_server.load("models/the_eiffel/scene.gltf#Scene0");
-    let mercure_monte_sur_pegase_handler =
-        asset_server.load("models/mercure_monte_sur_pegase/scene.gltf#Scene0");
-    let spawn_plane_depth = 500.0f32;
-
-    commands.spawn_scene(eiffel_tower_handle);
-    commands.spawn_scene(mercure_monte_sur_pegase_handler);
+    commands.spawn_scene(asset_server.load("models/the_eiffel/scene.gltf#Scene0"));
+    commands.spawn_scene(asset_server.load("models/mercure_monte_sur_pegase/scene.gltf#Scene0"));
 
     // light
     let theta = FRAC_PI_4;
@@ -40,6 +35,7 @@ fn setup(
     });
 
     // plane
+    let spawn_plane_depth = 500.0f32;
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane {
             size: 2.0 * spawn_plane_depth,
@@ -51,7 +47,7 @@ fn setup(
     // camera
     commands
         .spawn_bundle(PerspectiveCameraBundle {
-            transform: Transform::from_xyz(-40.0, 8.0, -200.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(200.0, 8.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..Default::default()
         })
         .insert(CameraController::default());
@@ -97,9 +93,6 @@ impl Default for CameraController {
         }
     }
 }
-
-#[derive(Component)]
-struct Fontaine;
 
 fn move_camera(
     mut query: Query<(&mut Transform, &mut CameraController), With<Camera>>,
