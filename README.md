@@ -1,4 +1,6 @@
-## Try it
+## LEDGERVERSE
+
+### Try it yourself
 
 ```sh
 gh repo clone JunichiSugiura/ledgerverse
